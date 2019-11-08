@@ -1,0 +1,2 @@
+[workspace]
+members = ["rust_src/usb_nif"]

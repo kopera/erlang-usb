@@ -1,0 +1,11 @@
+{application, usb, [
+    {description, "An OTP library"},
+    {vsn, "git"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {env,[]},
+    {modules, []}
+]}.
