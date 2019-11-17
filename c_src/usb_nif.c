@@ -1,9 +1,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <assert.h>
+#include <stdatomic.h>
 
-#include <string.h>
+#include <assert.h>
 
 #include <erl_nif.h>
 #include <libusb.h>
@@ -32,6 +32,8 @@ typedef struct {
 static ERL_NIF_TERM am_ok = 0;
 static ERL_NIF_TERM am_error = 0;
 
+static ERL_NIF_TERM am_closed = 0;
+
 static ERL_NIF_TERM am_io = 0;
 static ERL_NIF_TERM am_invalid_param = 0;
 static ERL_NIF_TERM am_access = 0;
@@ -48,17 +50,56 @@ static ERL_NIF_TERM am_other = 0;
 
 /* Resources */
 
+/* Resource: device */
 typedef struct {
     libusb_device  *device;
 } usb_nif_device_t;
 
 static ErlNifResourceType* usb_nif_device_resource_type;
 
-static void usb_nif_device_resource_dtor(ErlNifEnv* env, void *obj)
+static void usb_nif_device_resource_dtor(ErlNifEnv *env, void *obj)
 {
     usb_nif_device_t *usb_nif_device = (usb_nif_device_t *) obj;
     libusb_unref_device(usb_nif_device->device);
 }
+
+static ErlNifResourceTypeInit usb_nif_device_resource_callbacks = {
+    .dtor = usb_nif_device_resource_dtor,
+    .stop = NULL,
+    .down = NULL,
+};
+
+/* Resource: device_handle */
+typedef struct {
+    ErlNifPid               owner;
+    ErlNifMonitor           owner_monitor;
+
+    libusb_device_handle   *device_handle;
+    atomic_flag             device_handle_closed;
+} usb_nif_device_handle_t;
+
+static ErlNifResourceType* usb_nif_device_handle_resource_type;
+
+static void usb_nif_device_handle_resource_dtor(ErlNifEnv *env, void *obj)
+{
+    // nothing
+}
+
+static void usb_nif_device_handle_resource_owner_down(ErlNifEnv *env, void *obj, ErlNifPid* pid, ErlNifMonitor* monitor)
+{
+    usb_nif_device_handle_t *usb_nif_device_handle = (usb_nif_device_handle_t *) obj;
+
+    if (!atomic_flag_test_and_set(&usb_nif_device_handle->device_handle_closed)) {
+        libusb_close(usb_nif_device_handle->device_handle);
+        usb_nif_device_handle->device_handle = NULL;
+    }
+}
+
+static ErlNifResourceTypeInit usb_nif_device_handle_resource_callbacks = {
+    .dtor = usb_nif_device_handle_resource_dtor,
+    .stop = NULL,
+    .down = usb_nif_device_handle_resource_owner_down,
+};
 
 
 /* Helpers */
@@ -82,7 +123,8 @@ static ERL_NIF_TERM libusb_error_to_atom(enum libusb_error error)
     }
 }
 
-static ERL_NIF_TERM libusb_endpoints_export(ErlNifEnv* env, const struct libusb_endpoint_descriptor endpoint_descriptors[], uint8_t num_endpoint_descriptors)
+
+static ERL_NIF_TERM libusb_endpoints_export(ErlNifEnv *env, const struct libusb_endpoint_descriptor endpoint_descriptors[], uint8_t num_endpoint_descriptors)
 {
     ERL_NIF_TERM keys[] = {
         enif_make_atom(env, "address"),
@@ -115,8 +157,7 @@ static ERL_NIF_TERM libusb_endpoints_export(ErlNifEnv* env, const struct libusb_
         CHECK_MAP_ARRAYS(keys, values);
 
         ERL_NIF_TERM result_endpoint;
-        enif_make_map_from_arrays(
-            env,
+        enif_make_map_from_arrays(env,
             keys,
             values,
             ARRAY_LENGTH(keys),
@@ -132,7 +173,7 @@ static ERL_NIF_TERM libusb_endpoints_export(ErlNifEnv* env, const struct libusb_
 }
 
 
-static ERL_NIF_TERM libusb_interfaces_export(ErlNifEnv* env, const struct libusb_interface interfaces[], uint8_t num_interfaces)
+static ERL_NIF_TERM libusb_interfaces_export(ErlNifEnv *env, const struct libusb_interface interfaces[], uint8_t num_interfaces)
 {
     ERL_NIF_TERM interface_keys[] = {
         enif_make_atom(env, "alt_settings"),
@@ -175,8 +216,7 @@ static ERL_NIF_TERM libusb_interfaces_export(ErlNifEnv* env, const struct libusb
             CHECK_MAP_ARRAYS(alt_setting_keys, alt_setting_values);
 
             ERL_NIF_TERM result_alt_setting;
-            enif_make_map_from_arrays(
-                env,
+            enif_make_map_from_arrays(env,
                 alt_setting_keys,
                 alt_setting_values,
                 ARRAY_LENGTH(alt_setting_keys),
@@ -195,8 +235,7 @@ static ERL_NIF_TERM libusb_interfaces_export(ErlNifEnv* env, const struct libusb
         CHECK_MAP_ARRAYS(interface_keys, interface_values);
 
         ERL_NIF_TERM result_interface;
-        enif_make_map_from_arrays(
-                env,
+        enif_make_map_from_arrays(env,
                 interface_keys,
                 interface_values,
                 ARRAY_LENGTH(interface_keys),
@@ -211,9 +250,10 @@ static ERL_NIF_TERM libusb_interfaces_export(ErlNifEnv* env, const struct libusb
     return result;
 }
 
+
 /* API */
 
-static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     usb_nif_t *usb_nif = (usb_nif_t *) enif_priv_data(env);
     libusb_context *context = usb_nif->context;
@@ -242,7 +282,8 @@ static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv* env, int argc, const ERL_
     return enif_make_tuple2(env, am_ok, result);
 }
 
-static ERL_NIF_TERM usb_nif_get_device_descriptor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+
+static ERL_NIF_TERM usb_nif_get_device_descriptor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     usb_nif_device_t *usb_device;
 
@@ -288,8 +329,7 @@ static ERL_NIF_TERM usb_nif_get_device_descriptor(ErlNifEnv* env, int argc, cons
     CHECK_MAP_ARRAYS(keys, values);
 
     ERL_NIF_TERM result;
-    enif_make_map_from_arrays(
-        env,
+    enif_make_map_from_arrays(env,
         keys,
         values,
         ARRAY_LENGTH(keys),
@@ -298,7 +338,8 @@ static ERL_NIF_TERM usb_nif_get_device_descriptor(ErlNifEnv* env, int argc, cons
     return enif_make_tuple2(env, am_ok, result);
 }
 
-static ERL_NIF_TERM usb_nif_get_configuration_descriptor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+
+static ERL_NIF_TERM usb_nif_get_configuration_descriptor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     usb_nif_device_t *usb_device;
 
@@ -348,14 +389,71 @@ static ERL_NIF_TERM usb_nif_get_configuration_descriptor(ErlNifEnv* env, int arg
     CHECK_MAP_ARRAYS(keys, values);
 
     ERL_NIF_TERM result;
-    enif_make_map_from_arrays(
-        env,
+    enif_make_map_from_arrays(env,
         keys,
         values,
         ARRAY_LENGTH(keys),
         &result);
 
     return enif_make_tuple2(env, am_ok, result);
+}
+
+
+static ERL_NIF_TERM usb_nif_open_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_t *usb_device;
+
+    if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
+        return enif_make_badarg(env);
+    }
+
+    libusb_device_handle *device_handle;
+    int ret = libusb_open(usb_device->device, &device_handle);
+    if (ret != LIBUSB_SUCCESS){
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    ErlNifPid owner;
+    enif_self(env, &owner);
+
+    usb_nif_device_handle_t *usb_nif_device_handle = (usb_nif_device_handle_t*) enif_alloc_resource(
+        usb_nif_device_handle_resource_type,
+        sizeof(usb_nif_device_handle_t));
+    usb_nif_device_handle->owner = owner;
+    usb_nif_device_handle->device_handle = device_handle;
+    atomic_flag_clear(&(usb_nif_device_handle->device_handle_closed));
+
+    if (enif_monitor_process(env, usb_nif_device_handle, &owner, &usb_nif_device_handle->owner_monitor)) {
+        enif_release_resource(usb_nif_device_handle);
+        libusb_close(device_handle);
+        return enif_make_tuple2(env, am_error, am_other);
+    }
+
+    ERL_NIF_TERM result = enif_make_resource(env, usb_nif_device_handle);
+    enif_release_resource(usb_nif_device_handle);
+
+    return enif_make_tuple2(env, am_ok, result);
+}
+
+
+static ERL_NIF_TERM usb_nif_close_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    if (!atomic_flag_test_and_set(&usb_nif_device_handle->device_handle_closed)) {
+        libusb_close(usb_nif_device_handle->device_handle);
+        usb_nif_device_handle->device_handle = NULL;
+
+        enif_demonitor_process(env, usb_nif_device_handle, &usb_nif_device_handle->owner_monitor);
+
+        return am_ok;
+    } else {
+        return enif_make_tuple2(env, am_error, am_closed);
+    }
 }
 
 
@@ -421,6 +519,8 @@ static int usb_nif_on_load(ErlNifEnv *env, void** priv_data, ERL_NIF_TERM load_i
     am_ok = enif_make_atom(env, "ok");
     am_error = enif_make_atom(env, "error");
 
+    am_closed = enif_make_atom(env, "closed");
+
     am_io = enif_make_atom(env, "io");
     am_invalid_param = enif_make_atom(env, "invalid_param");
     am_access = enif_make_atom(env, "access");
@@ -436,10 +536,15 @@ static int usb_nif_on_load(ErlNifEnv *env, void** priv_data, ERL_NIF_TERM load_i
     am_other = enif_make_atom(env, "other");
 
     // Resources
-    usb_nif_device_resource_type = enif_open_resource_type(env,
-        NULL,
+    usb_nif_device_resource_type = enif_open_resource_type_x(env,
         "usb_device",
-        usb_nif_device_resource_dtor,
+        &usb_nif_device_resource_callbacks,
+        ERL_NIF_RT_CREATE,
+        NULL);
+
+    usb_nif_device_handle_resource_type = enif_open_resource_type_x(env,
+        "usb_device_handle",
+        &usb_nif_device_handle_resource_callbacks,
         ERL_NIF_RT_CREATE,
         NULL);
 
@@ -486,6 +591,9 @@ static ErlNifFunc nif_funcs[] = {
 
     {"get_device_descriptor_nif", 1, usb_nif_get_device_descriptor},
     {"get_configuration_descriptor_nif", 2, usb_nif_get_configuration_descriptor},
+
+    {"open_device_nif", 1, usb_nif_open_device},
+    {"close_device_nif", 1, usb_nif_close_device},
 };
 
 

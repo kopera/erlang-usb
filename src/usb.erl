@@ -6,8 +6,13 @@
     get_device_descriptor/1,
     get_configuration_descriptor/2
 ]).
+-export([
+    open_device/1,
+    close_device/1
+]).
 -export_type([
-    device/0
+    device/0,
+    device_handle/0
 ]).
 -on_load(init/0).
 
@@ -94,6 +99,23 @@ get_configuration_descriptor(Device, ConfigIndex) ->
 
 %% nif
 get_configuration_descriptor_nif(_Device, _ConfigIndex) ->
+    erlang:nif_error(not_loaded).
+
+
+-spec open_device(device()) -> {ok, device_handle()} | {error, term()}.
+-opaque device_handle() :: reference().
+open_device(Device) ->
+    open_device_nif(Device).
+
+open_device_nif(_Device) ->
+    erlang:nif_error(not_loaded).
+
+
+-spec close_device(device_handle()) -> ok | {error, term()}.
+close_device(DeviceHandle) ->
+    close_device_nif(DeviceHandle).
+
+close_device_nif(_DeviceHandle) ->
     erlang:nif_error(not_loaded).
 
 
