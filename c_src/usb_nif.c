@@ -32,6 +32,10 @@ typedef struct {
 static ERL_NIF_TERM am_ok = 0;
 static ERL_NIF_TERM am_error = 0;
 
+static ERL_NIF_TERM am_usb = 0;
+static ERL_NIF_TERM am_device_arrived = 0;
+static ERL_NIF_TERM am_device_left = 0;
+
 static ERL_NIF_TERM am_closed = 0;
 
 static ERL_NIF_TERM am_io = 0;
@@ -56,6 +60,16 @@ typedef struct {
 } usb_nif_device_t;
 
 static ErlNifResourceType* usb_nif_device_resource_type;
+
+static usb_nif_device_t* usb_nif_device_resource_new(libusb_device *device)
+{
+    usb_nif_device_t *usb_device = (usb_nif_device_t*) enif_alloc_resource(
+        usb_nif_device_resource_type,
+        sizeof(usb_nif_device_t));
+    usb_device->device = device;
+
+    return usb_device;
+}
 
 static void usb_nif_device_resource_dtor(ErlNifEnv *env, void *obj)
 {
@@ -101,6 +115,38 @@ static ErlNifResourceTypeInit usb_nif_device_handle_resource_callbacks = {
     .down = usb_nif_device_handle_resource_owner_down,
 };
 
+
+/* Resource: hotplug_monitor */
+typedef struct {
+    ErlNifPid                       owner;
+    ErlNifMonitor                   owner_monitor;
+
+    libusb_hotplug_callback_handle  callback_handle;
+    atomic_flag                     closed;
+} usb_nif_hotplug_monitor_t;
+
+static ErlNifResourceType* usb_nif_hotplug_monitor_resource_type;
+
+static void usb_nif_hotplug_monitor_resource_dtor(ErlNifEnv *env, void *obj)
+{
+    // nothing
+}
+
+static void usb_nif_hotplug_monitor_resource_owner_down(ErlNifEnv *env, void *obj, ErlNifPid* pid, ErlNifMonitor* monitor)
+{
+    usb_nif_t *usb_nif = (usb_nif_t *) enif_priv_data(env);
+    usb_nif_hotplug_monitor_t *usb_nif_hotplug_monitor = (usb_nif_hotplug_monitor_t *) obj;
+
+    if (!atomic_flag_test_and_set(&usb_nif_hotplug_monitor->closed)) {
+        libusb_hotplug_deregister_callback(usb_nif->context, usb_nif_hotplug_monitor->callback_handle);
+    }
+}
+
+static ErlNifResourceTypeInit usb_nif_hotplug_monitor_resource_callbacks = {
+    .dtor = usb_nif_hotplug_monitor_resource_dtor,
+    .stop = NULL,
+    .down = usb_nif_hotplug_monitor_resource_owner_down,
+};
 
 /* Helpers */
 
@@ -250,6 +296,38 @@ static ERL_NIF_TERM libusb_interfaces_export(ErlNifEnv *env, const struct libusb
     return result;
 }
 
+static int libusb_hotplug_callback(libusb_context *context, libusb_device *device, libusb_hotplug_event event, void *user_data)
+{
+    usb_nif_hotplug_monitor_t *usb_nif_hotplug_monitor = (usb_nif_hotplug_monitor_t *)user_data;
+
+    switch (event) {
+        case LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED: {
+            ErlNifEnv *env = enif_alloc_env();
+            usb_nif_device_t *usb_nif_device = usb_nif_device_resource_new(device);
+
+            ERL_NIF_TERM payload = enif_make_resource(env, usb_nif_device);
+            ERL_NIF_TERM message = enif_make_tuple3(env, am_usb, am_device_arrived, payload);
+            enif_send(NULL, &(usb_nif_hotplug_monitor->owner), env, message);
+
+            enif_release_resource(usb_nif_device);
+            enif_free_env(env);
+        }
+        case LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT: {
+            ErlNifEnv *env = enif_alloc_env();
+            usb_nif_device_t *usb_nif_device = usb_nif_device_resource_new(device);
+
+            ERL_NIF_TERM payload = enif_make_resource(env, usb_nif_device);
+            ERL_NIF_TERM message = enif_make_tuple3(env, am_usb, am_device_left, payload);
+            enif_send(NULL, &(usb_nif_hotplug_monitor->owner), env, message);
+
+            enif_release_resource(usb_nif_device);
+            enif_free_env(env);
+        }
+    }
+
+    return 0;
+}
+
 
 /* API */
 
@@ -266,16 +344,13 @@ static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv *env, int argc, const ERL_
 
     ERL_NIF_TERM result = enif_make_list(env, 0);
     for (size_t i = ret; i > 0; i--) {
-        usb_nif_device_t *usb_device = (usb_nif_device_t*) enif_alloc_resource(
-            usb_nif_device_resource_type,
-            sizeof(usb_nif_device_t));
-        usb_device->device = devices[i - 1];
+        usb_nif_device_t *usb_nif_device = usb_nif_device_resource_new(devices[i - 1]);
 
         result = enif_make_list_cell(
             env,
-            enif_make_resource(env, usb_device),
+            enif_make_resource(env, usb_nif_device),
             result);
-        enif_release_resource(usb_device);
+        enif_release_resource(usb_nif_device);
     }
     libusb_free_device_list(devices, false);
 
@@ -439,7 +514,6 @@ static ERL_NIF_TERM usb_nif_open_device(ErlNifEnv* env, int argc, const ERL_NIF_
 static ERL_NIF_TERM usb_nif_close_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     usb_nif_device_handle_t *usb_nif_device_handle;
-
     if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
         return enif_make_badarg(env);
     }
@@ -454,6 +528,78 @@ static ERL_NIF_TERM usb_nif_close_device(ErlNifEnv* env, int argc, const ERL_NIF
     } else {
         return enif_make_tuple2(env, am_error, am_closed);
     }
+}
+
+
+static ERL_NIF_TERM usb_nif_monitor_hotplug(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_t *usb_nif = (usb_nif_t *) enif_priv_data(env);
+
+    unsigned int flags;
+    if (!enif_get_uint(env, argv[0], &flags)) {
+        return enif_make_badarg(env);
+    }
+
+    ErlNifPid owner;
+    enif_self(env, &owner);
+
+    usb_nif_hotplug_monitor_t *usb_nif_hotplug_monitor = (usb_nif_hotplug_monitor_t*) enif_alloc_resource(
+        usb_nif_hotplug_monitor_resource_type,
+        sizeof(usb_nif_hotplug_monitor_t));
+    usb_nif_hotplug_monitor->owner = owner;
+    atomic_flag_clear(&(usb_nif_hotplug_monitor->closed));
+
+    int libusb_flags = LIBUSB_HOTPLUG_NO_FLAGS;
+    if (flags & (1U << 0)) {
+        libusb_flags |= LIBUSB_HOTPLUG_ENUMERATE;
+    }
+
+    int ret = libusb_hotplug_register_callback(usb_nif->context,
+        LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED | LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT,
+        libusb_flags,
+        LIBUSB_HOTPLUG_MATCH_ANY,
+        LIBUSB_HOTPLUG_MATCH_ANY,
+        LIBUSB_HOTPLUG_MATCH_ANY,
+        libusb_hotplug_callback,
+        usb_nif_hotplug_monitor,
+        &(usb_nif_hotplug_monitor->callback_handle));
+    if (ret != LIBUSB_SUCCESS) {
+        enif_release_resource(usb_nif_hotplug_monitor);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    if (enif_monitor_process(env, usb_nif_hotplug_monitor, &owner, &usb_nif_hotplug_monitor->owner_monitor)) {
+        libusb_hotplug_deregister_callback(usb_nif->context,
+            usb_nif_hotplug_monitor->callback_handle);
+        enif_release_resource(usb_nif_hotplug_monitor);
+        return enif_make_tuple2(env, am_error, am_other);
+    }
+
+    ERL_NIF_TERM result = enif_make_resource(env, usb_nif_hotplug_monitor);
+    enif_release_resource(usb_nif_hotplug_monitor);
+
+    return enif_make_tuple2(env, am_ok, result);
+}
+
+
+static ERL_NIF_TERM usb_nif_demonitor_hotplug(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_t *usb_nif = (usb_nif_t *) enif_priv_data(env);
+
+    usb_nif_hotplug_monitor_t *usb_nif_hotplug_monitor;
+    if (!enif_get_resource(env, argv[0], usb_nif_hotplug_monitor_resource_type, (void**) &usb_nif_hotplug_monitor)) {
+        return enif_make_badarg(env);
+    }
+
+    if (!atomic_flag_test_and_set(&usb_nif_hotplug_monitor->closed)) {
+        libusb_hotplug_deregister_callback(usb_nif->context,
+            usb_nif_hotplug_monitor->callback_handle);
+
+        enif_demonitor_process(env, usb_nif_hotplug_monitor,
+            &usb_nif_hotplug_monitor->owner_monitor);
+    }
+
+    return am_ok;
 }
 
 
@@ -519,6 +665,10 @@ static int usb_nif_on_load(ErlNifEnv *env, void** priv_data, ERL_NIF_TERM load_i
     am_ok = enif_make_atom(env, "ok");
     am_error = enif_make_atom(env, "error");
 
+    am_usb = enif_make_atom(env, "usb");
+    am_device_arrived = enif_make_atom(env, "device_arrived");
+    am_device_left = enif_make_atom(env, "device_left");
+
     am_closed = enif_make_atom(env, "closed");
 
     am_io = enif_make_atom(env, "io");
@@ -545,6 +695,12 @@ static int usb_nif_on_load(ErlNifEnv *env, void** priv_data, ERL_NIF_TERM load_i
     usb_nif_device_handle_resource_type = enif_open_resource_type_x(env,
         "usb_device_handle",
         &usb_nif_device_handle_resource_callbacks,
+        ERL_NIF_RT_CREATE,
+        NULL);
+
+    usb_nif_hotplug_monitor_resource_type = enif_open_resource_type_x(env,
+        "usb_hotplug_monitor",
+        &usb_nif_hotplug_monitor_resource_callbacks,
         ERL_NIF_RT_CREATE,
         NULL);
 
@@ -594,6 +750,9 @@ static ErlNifFunc nif_funcs[] = {
 
     {"open_device_nif", 1, usb_nif_open_device},
     {"close_device_nif", 1, usb_nif_close_device},
+
+    {"monitor_hotplug_nif", 1, usb_nif_monitor_hotplug},
+    {"demonitor_hotplug_nif", 1, usb_nif_demonitor_hotplug},
 };
 
 

@@ -10,9 +10,15 @@
     open_device/1,
     close_device/1
 ]).
+-export([
+    monitor_hotplug/0,
+    monitor_hotplug/1,
+    demonitor_hotplug/1
+]).
 -export_type([
     device/0,
-    device_handle/0
+    device_handle/0,
+    hotplug_monitor/0
 ]).
 -on_load(init/0).
 
@@ -116,6 +122,41 @@ close_device(DeviceHandle) ->
     close_device_nif(DeviceHandle).
 
 close_device_nif(_DeviceHandle) ->
+    erlang:nif_error(not_loaded).
+
+
+%
+% Hotplug API
+%
+
+%% @doc start listening for hotplug events. The owner process will
+%%      start receiving hotplug events such as:
+%%      `{usb, Context, {hotplug, device_arrived, Device}}` and
+%%      `{usb, Context, {hotplug, device_left, Device}}`.
+-spec monitor_hotplug() -> {ok, hotplug_monitor()} | {error, term()}.
+-opaque hotplug_monitor() :: reference().
+monitor_hotplug() ->
+    monitor_hotplug([]).
+
+-spec monitor_hotplug([monitor_hotplug_flag()]) -> {ok, hotplug_monitor()} | {error, term()}.
+-type monitor_hotplug_flag() :: enumerate.
+monitor_hotplug(Flags) ->
+    monitor_hotplug_nif(lists:foldl(fun
+        (enumerate, Acc) ->
+            Acc bor (1 bsl 0)
+    end, 0, Flags)).
+
+%% nif
+monitor_hotplug_nif(_Flags) ->
+    erlang:nif_error(not_loaded).
+
+
+-spec demonitor_hotplug(hotplug_monitor()) -> ok | {error, term()}.
+demonitor_hotplug(HotplugEvents) ->
+    demonitor_hotplug_nif(HotplugEvents).
+
+%% nif
+demonitor_hotplug_nif(_HotplugEvents) ->
     erlang:nif_error(not_loaded).
 
 
