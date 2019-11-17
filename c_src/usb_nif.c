@@ -311,6 +311,8 @@ static int libusb_hotplug_callback(libusb_context *context, libusb_device *devic
 
             enif_release_resource(usb_nif_device);
             enif_free_env(env);
+
+            return 0;
         }
         case LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT: {
             ErlNifEnv *env = enif_alloc_env();
@@ -322,10 +324,12 @@ static int libusb_hotplug_callback(libusb_context *context, libusb_device *devic
 
             enif_release_resource(usb_nif_device);
             enif_free_env(env);
-        }
-    }
 
     return 0;
+        }
+        default:
+            return 0;
+    }
 }
 
 
