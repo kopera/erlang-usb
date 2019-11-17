@@ -66,7 +66,7 @@ static usb_nif_device_t* usb_nif_device_resource_new(libusb_device *device)
     usb_nif_device_t *usb_device = (usb_nif_device_t*) enif_alloc_resource(
         usb_nif_device_resource_type,
         sizeof(usb_nif_device_t));
-    usb_device->device = device;
+    usb_device->device = libusb_ref_device(device);
 
     return usb_device;
 }
@@ -139,6 +139,8 @@ static void usb_nif_hotplug_monitor_resource_owner_down(ErlNifEnv *env, void *ob
 
     if (!atomic_flag_test_and_set(&usb_nif_hotplug_monitor->closed)) {
         libusb_hotplug_deregister_callback(usb_nif->context, usb_nif_hotplug_monitor->callback_handle);
+
+        enif_release_resource(usb_nif_hotplug_monitor);
     }
 }
 
@@ -325,7 +327,7 @@ static int libusb_hotplug_callback(libusb_context *context, libusb_device *devic
             enif_release_resource(usb_nif_device);
             enif_free_env(env);
 
-    return 0;
+            return 0;
         }
         default:
             return 0;
@@ -356,7 +358,7 @@ static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv *env, int argc, const ERL_
             result);
         enif_release_resource(usb_nif_device);
     }
-    libusb_free_device_list(devices, false);
+    libusb_free_device_list(devices, true);
 
     return enif_make_tuple2(env, am_ok, result);
 }
@@ -575,7 +577,12 @@ static ERL_NIF_TERM usb_nif_monitor_hotplug(ErlNifEnv* env, int argc, const ERL_
     if (enif_monitor_process(env, usb_nif_hotplug_monitor, &owner, &usb_nif_hotplug_monitor->owner_monitor)) {
         libusb_hotplug_deregister_callback(usb_nif->context,
             usb_nif_hotplug_monitor->callback_handle);
-        enif_release_resource(usb_nif_hotplug_monitor);
+        // The resource must NOT be released here because we give
+        // a pointer to it to libusb. Which means this resource
+        // is still reachable from the `C` world. The resource
+        // is release when demonitoring the hotplug either explicitely
+        // through the API call or implicitely when the owner process
+        // terminates.
         return enif_make_tuple2(env, am_error, am_other);
     }
 
@@ -601,6 +608,8 @@ static ERL_NIF_TERM usb_nif_demonitor_hotplug(ErlNifEnv* env, int argc, const ER
 
         enif_demonitor_process(env, usb_nif_hotplug_monitor,
             &usb_nif_hotplug_monitor->owner_monitor);
+
+        enif_release_resource(usb_nif_hotplug_monitor);
     }
 
     return am_ok;
