@@ -8,7 +8,9 @@
 ]).
 -export([
     open_device/1,
-    close_device/1
+    close_device/1,
+    claim_interface/2,
+    release_interface/2
 ]).
 -export([
     monitor_hotplug/0,
@@ -122,6 +124,23 @@ close_device(DeviceHandle) ->
     close_device_nif(DeviceHandle).
 
 close_device_nif(_DeviceHandle) ->
+    erlang:nif_error(not_loaded).
+
+
+-spec claim_interface(device_handle(), non_neg_integer()) -> ok | {error, term()}.
+claim_interface(DeviceHandle, InterfaceNumber) ->
+    claim_interface_nif(DeviceHandle, InterfaceNumber).
+
+claim_interface_nif(_DeviceHandle, _InterfaceNumber) ->
+    erlang:nif_error(not_loaded).
+
+
+
+-spec release_interface(device_handle(), non_neg_integer()) -> ok | {error, term()}.
+release_interface(DeviceHandle, InterfaceNumber) ->
+    release_interface_nif(DeviceHandle, InterfaceNumber).
+
+release_interface_nif(_DeviceHandle, _InterfaceNumber) ->
     erlang:nif_error(not_loaded).
 
 

@@ -616,6 +616,48 @@ static ERL_NIF_TERM usb_nif_demonitor_hotplug(ErlNifEnv* env, int argc, const ER
 }
 
 
+static ERL_NIF_TERM usb_nif_claim_interface(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int interface_number;
+    if(!enif_get_uint(env, argv[1], &interface_number)){
+        return enif_make_badarg(env);
+    }
+
+    int ret = libusb_claim_interface(usb_nif_device_handle->device_handle, (int) interface_number);
+    if(ret != LIBUSB_SUCCESS) {
+        enif_release_resource(usb_nif_device_handle);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    return am_ok;
+}
+
+static ERL_NIF_TERM usb_nif_release_interface(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int interface_number;
+    if(!enif_get_uint(env, argv[1], &interface_number)){
+        return enif_make_badarg(env);
+    }
+
+    int ret = libusb_release_interface(usb_nif_device_handle->device_handle, (int) interface_number);
+    if(ret != LIBUSB_SUCCESS) {
+        enif_release_resource(usb_nif_device_handle);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    return am_ok;
+}
+
 /* Initialization */
 
 static void* usb_nif_handle_events(void *user_data)
@@ -766,6 +808,9 @@ static ErlNifFunc nif_funcs[] = {
 
     {"monitor_hotplug_nif", 1, usb_nif_monitor_hotplug},
     {"demonitor_hotplug_nif", 1, usb_nif_demonitor_hotplug},
+
+    {"claim_interface_nif", 2, usb_nif_claim_interface},
+    {"release_interface_nif", 2, usb_nif_release_interface}
 };
 
 
