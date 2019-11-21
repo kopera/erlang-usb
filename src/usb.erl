@@ -14,7 +14,9 @@
     read_bulk/4,
     write_bulk/4,
     read_interrupt/4,
-    write_interrupt/4
+    write_interrupt/4,
+    read_control/7,
+    write_control/7
 ]).
 -export([
     monitor_hotplug/0,
@@ -178,6 +180,23 @@ write_interrupt(DeviceHandle, Endpoint, Data, Timeout) ->
 %% nif
 write_interrupt_nif(_DeviceHandle, _Endpoint, _Data, _Timeout) ->
     erlang:nif_error(not_loaded).
+
+-spec read_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer()) -> {ok, binary()} | {error, term()}.
+read_control(DeviceHandle, RequestType, Request, Value, Index, ReadLen, Timeout) ->
+    read_control_nif(DeviceHandle, RequestType, Request, Value, Index, ReadLen, Timeout).
+
+%% nif
+read_control_nif(_DeviceHandle,_RequestType, _Request, _Value, _Index, _ReadLen, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec write_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), binary(), non_neg_integer()) -> {ok, integer()} | {error, term()}.
+write_control(DeviceHandle, RequestType, Request, Value, Index, Data, Timeout) ->
+    write_control_nif(DeviceHandle, RequestType, Request, Value, Index, Data, Timeout).
+
+%% nif
+write_control_nif(_DeviceHandle,_RequestType, _Request, _Value, _Index, _Data, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
 
 %
 % Hotplug API
