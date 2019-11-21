@@ -10,7 +10,11 @@
     open_device/1,
     close_device/1,
     claim_interface/2,
-    release_interface/2
+    release_interface/2,
+    read_bulk/4,
+    write_bulk/4,
+    read_interrupt/4,
+    write_interrupt/4
 ]).
 -export([
     monitor_hotplug/0,
@@ -143,6 +147,37 @@ release_interface(DeviceHandle, InterfaceNumber) ->
 release_interface_nif(_DeviceHandle, _InterfaceNumber) ->
     erlang:nif_error(not_loaded).
 
+-spec read_bulk(device_handle(), byte(), integer(), non_neg_integer()) -> {ok, binary()} | {error, term()}.
+read_bulk(DeviceHandle, Endpoint, DataLen, Timeout) ->
+    read_bulk_nif(DeviceHandle, Endpoint, DataLen, Timeout).
+
+%% nif
+read_bulk_nif(_DeviceHandle, _Endpoint, _DataLen, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec write_bulk(device_handle(), byte(), binary(), non_neg_integer()) -> {ok, integer()} | {error, term()}.
+write_bulk(DeviceHandle, Endpoint, Data, Timeout) ->
+    write_bulk_nif(DeviceHandle, Endpoint, Data, Timeout).
+
+%% nif
+write_bulk_nif(_DeviceHandle, _Endpoint, _Data, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec read_interrupt(device_handle(), byte(), integer(), non_neg_integer()) -> {ok, binary()} | {error, term()}.
+read_interrupt(DeviceHandle, Endpoint, DataLen, Timeout) ->
+    read_interrupt_nif(DeviceHandle, Endpoint, DataLen, Timeout).
+
+%% nif
+read_interrupt_nif(_DeviceHandle, _Endpoint, _DataLen, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec write_interrupt(device_handle(), byte(), binary(), non_neg_integer()) -> {ok, integer()} | {error, term()}.
+write_interrupt(DeviceHandle, Endpoint, Data, Timeout) ->
+    write_interrupt_nif(DeviceHandle, Endpoint, Data, Timeout).
+
+%% nif
+write_interrupt_nif(_DeviceHandle, _Endpoint, _Data, _Timeout) ->
+    erlang:nif_error(not_loaded).
 
 %
 % Hotplug API

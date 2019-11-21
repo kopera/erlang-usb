@@ -658,6 +658,174 @@ static ERL_NIF_TERM usb_nif_release_interface(ErlNifEnv* env, int argc, const ER
     return am_ok;
 }
 
+static ERL_NIF_TERM usb_nif_read_bulk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int endpoint;
+    if (!enif_get_uint(env, argv[1], &endpoint)) {
+        return enif_make_badarg(env);
+    }
+
+    int data_len;
+    if (!enif_get_int(env, argv[2], &data_len)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int timeout;
+    if (!enif_get_uint(env, argv[3], &timeout)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned char *p_data;
+    if (!(p_data = (unsigned char *)enif_alloc(data_len))) {
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(LIBUSB_ERROR_NO_MEM));
+    }
+
+    int ret;
+    int transferred;
+
+    ret = libusb_bulk_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, p_data, data_len, &transferred, timeout);
+
+    if (ret != LIBUSB_SUCCESS) {
+        enif_free(p_data);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    ERL_NIF_TERM data;
+    memcpy((void*)enif_make_new_binary(env, (size_t) transferred, &data), (void*)p_data, (size_t)transferred);
+    enif_free(p_data);
+
+    return enif_make_tuple2(env, am_ok, data);
+}
+
+static ERL_NIF_TERM usb_nif_write_bulk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int endpoint;
+    if(!enif_get_uint(env, argv[1], &endpoint)){
+        return enif_make_badarg(env);
+    }
+
+    ErlNifBinary tx;
+    if (!enif_inspect_binary(env, argv[2], &tx)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int timeout;
+    if(!enif_get_uint(env, argv[3], &timeout)){
+        return enif_make_badarg(env);
+    }
+
+    int ret;
+    int transferred = 0;
+    ret = libusb_bulk_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, tx.data, tx.size, &transferred, timeout);
+
+    if (ret != LIBUSB_SUCCESS) {
+        ERL_NIF_TERM err;
+        if (ret == LIBUSB_ERROR_TIMEOUT) {
+            err = enif_make_tuple2(env, libusb_error_to_atom(ret), enif_make_int(env, transferred));
+        } else {
+            err = libusb_error_to_atom(ret);
+        }
+        return enif_make_tuple2(env, am_error, err);
+    }
+
+    return enif_make_tuple2(env, am_ok, enif_make_int(env, transferred));
+}
+
+static ERL_NIF_TERM usb_nif_read_interrupt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int endpoint;
+    if (!enif_get_uint(env, argv[1], &endpoint)) {
+        return enif_make_badarg(env);
+    }
+
+    int data_len;
+    if (!enif_get_int(env, argv[2], &data_len)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int timeout;
+    if (!enif_get_uint(env, argv[3], &timeout)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned char *p_data;
+    if (!(p_data = (unsigned char *)enif_alloc(data_len))) {
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(LIBUSB_ERROR_NO_MEM));
+    }
+
+    int ret;
+    int transferred;
+
+    ret = libusb_interrupt_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, p_data, data_len, &transferred, timeout);
+
+    if (ret != LIBUSB_SUCCESS) {
+        enif_free(p_data);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    ERL_NIF_TERM data;
+    memcpy((void*)enif_make_new_binary(env, (size_t) transferred, &data), (void*)p_data, (size_t)transferred);
+    enif_free(p_data);
+
+    return enif_make_tuple2(env, am_ok, data);
+}
+
+static ERL_NIF_TERM usb_nif_write_interrupt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int endpoint;
+    if(!enif_get_uint(env, argv[1], &endpoint)){
+        return enif_make_badarg(env);
+    }
+
+    ErlNifBinary tx;
+    if (!enif_inspect_binary(env, argv[2], &tx)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int timeout;
+    if(!enif_get_uint(env, argv[3], &timeout)){
+        return enif_make_badarg(env);
+    }
+
+    int ret;
+    int transferred = 0;
+    ret = libusb_interrupt_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, tx.data, tx.size, &transferred, timeout);
+
+    if (ret != LIBUSB_SUCCESS) {
+        ERL_NIF_TERM err;
+        if (ret == LIBUSB_ERROR_TIMEOUT) {
+            err = enif_make_tuple2(env, libusb_error_to_atom(ret), enif_make_int(env, transferred));
+        } else {
+            err = libusb_error_to_atom(ret);
+        }
+        return enif_make_tuple2(env, am_error, err);
+    }
+
+    return enif_make_tuple2(env, am_ok, enif_make_int(env, transferred));
+}
+
+
+
 /* Initialization */
 
 static void* usb_nif_handle_events(void *user_data)
@@ -810,7 +978,14 @@ static ErlNifFunc nif_funcs[] = {
     {"demonitor_hotplug_nif", 1, usb_nif_demonitor_hotplug},
 
     {"claim_interface_nif", 2, usb_nif_claim_interface},
-    {"release_interface_nif", 2, usb_nif_release_interface}
+    {"release_interface_nif", 2, usb_nif_release_interface},
+
+    {"read_bulk_nif", 4, usb_nif_read_bulk, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"write_bulk_nif", 4, usb_nif_write_bulk, ERL_NIF_DIRTY_JOB_IO_BOUND},
+
+    {"read_interrupt_nif", 4, usb_nif_read_interrupt, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"write_interrupt_nif", 4, usb_nif_write_interrupt, ERL_NIF_DIRTY_JOB_IO_BOUND}
+
 };
 
 
