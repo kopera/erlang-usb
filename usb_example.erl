@@ -73,7 +73,6 @@ handle_info({timeout, _Ref, trigger}, State) ->
         {error, no_device} ->
             io:fwrite("Device removed ")
     end,
-    erlang:cancel(State#state.tref),
     TRef = erlang:start_timer(?INTERVAL, self(), trigger),
     NewState = State#state{tref = TRef},
     {noreply, NewState};
