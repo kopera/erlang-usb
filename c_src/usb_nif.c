@@ -999,7 +999,7 @@ static ERL_NIF_TERM usb_nif_attach_kernel_driver(ErlNifEnv* env, int argc, const
     }
 
     int interface_number;
-    if(!enif_get_int(env, argv[1], &interface_number)) {
+    if (!enif_get_int(env, argv[1], &interface_number)) {
         return enif_make_badarg(env);
     }
 
