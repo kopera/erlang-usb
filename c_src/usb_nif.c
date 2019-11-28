@@ -658,6 +658,27 @@ static ERL_NIF_TERM usb_nif_release_interface(ErlNifEnv* env, int argc, const ER
     return am_ok;
 }
 
+static ERL_NIF_TERM usb_nif_set_configuration(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    int configuration;
+    if(!enif_get_int(env, argv[1], &configuration)) {
+        return enif_make_badarg(env);
+    }
+
+    int ret = libusb_set_configuration(usb_nif_device_handle->device_handle, configuration);
+    if(ret != LIBUSB_SUCCESS) {
+        enif_release_resource(usb_nif_device_handle);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    return am_ok;
+}
+
 static ERL_NIF_TERM usb_nif_read_bulk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     usb_nif_device_handle_t *usb_nif_device_handle;
@@ -772,7 +793,6 @@ static ERL_NIF_TERM usb_nif_read_interrupt(ErlNifEnv* env, int argc, const ERL_N
     int transferred;
 
     ret = libusb_interrupt_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, p_data, data_len, &transferred, timeout);
-
     if (ret != LIBUSB_SUCCESS) {
         enif_free(p_data);
         return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
@@ -928,7 +948,67 @@ static ERL_NIF_TERM usb_nif_write_control(ErlNifEnv* env, int argc, const ERL_NI
     return enif_make_tuple2(env, am_ok, enif_make_int(env, ret));
 }
 
+static ERL_NIF_TERM usb_nif_has_capability(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    unsigned int capability;
+    if (!enif_get_uint(env, argv[0], &capability)) {
+        return enif_make_badarg(env);
+    }
 
+    return (libusb_has_capability(capability)) ? am_ok : am_not_supported;
+}
+
+
+static ERL_NIF_TERM usb_nif_detach_kernel_driver(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    int interface_number;
+    if (!enif_get_int(env, argv[1], &interface_number)) {
+        return enif_make_badarg(env);
+    }
+
+    if (libusb_has_capability(LIBUSB_CAP_SUPPORTS_DETACH_KERNEL_DRIVER)) {
+        int ret;
+        ret = libusb_kernel_driver_active(usb_nif_device_handle->device_handle, interface_number);
+        if (ret) {
+            if (ret == 1) {
+                if ((ret = libusb_detach_kernel_driver(usb_nif_device_handle->device_handle, interface_number))) {
+                    return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+                }
+                return am_ok;
+            }
+
+            return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+        }
+        else
+            return am_ok;
+    }
+
+    return enif_make_tuple2(env, am_error, am_not_supported);
+}
+
+static ERL_NIF_TERM usb_nif_attach_kernel_driver(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    int interface_number;
+    if(!enif_get_int(env, argv[1], &interface_number)) {
+        return enif_make_badarg(env);
+    }
+
+    int ret;
+    if ((ret = libusb_attach_kernel_driver(usb_nif_device_handle->device_handle, interface_number))) {
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+    return am_ok;
+}
 
 /* Initialization */
 
@@ -1084,6 +1164,8 @@ static ErlNifFunc nif_funcs[] = {
     {"claim_interface_nif", 2, usb_nif_claim_interface},
     {"release_interface_nif", 2, usb_nif_release_interface},
 
+    {"set_configuration_nif", 2, usb_nif_set_configuration, ERL_NIF_DIRTY_JOB_IO_BOUND},
+
     {"read_bulk_nif", 4, usb_nif_read_bulk, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"write_bulk_nif", 4, usb_nif_write_bulk, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
@@ -1091,8 +1173,11 @@ static ErlNifFunc nif_funcs[] = {
     {"write_interrupt_nif", 4, usb_nif_write_interrupt, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     {"read_control_nif", 7, usb_nif_read_control, ERL_NIF_DIRTY_JOB_IO_BOUND},
-    {"write_control_nif", 7, usb_nif_write_control, ERL_NIF_DIRTY_JOB_IO_BOUND}
+    {"write_control_nif", 7, usb_nif_write_control, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
+    {"has_capability_nif", 1, usb_nif_has_capability},
+    {"attach_kernel_driver", 2, usb_nif_attach_kernel_driver},
+    {"detach_kernel_driver", 2, usb_nif_detach_kernel_driver}
 };
 
 

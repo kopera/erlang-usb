@@ -11,12 +11,15 @@
     close_device/1,
     claim_interface/2,
     release_interface/2,
+    set_configuration/2,
     read_bulk/4,
     write_bulk/4,
     read_interrupt/4,
     write_interrupt/4,
     read_control/7,
-    write_control/7
+    write_control/7,
+    attach_kernel_driver/2,
+    detach_kernel_driver/2
 ]).
 -export([
     monitor_hotplug/0,
@@ -28,6 +31,10 @@
     device_handle/0,
     hotplug_monitor/0
 ]).
+-export([
+    has_capability/1
+]).
+
 -on_load(init/0).
 
 
@@ -140,14 +147,34 @@ claim_interface(DeviceHandle, InterfaceNumber) ->
 claim_interface_nif(_DeviceHandle, _InterfaceNumber) ->
     erlang:nif_error(not_loaded).
 
-
-
 -spec release_interface(device_handle(), non_neg_integer()) -> ok | {error, term()}.
 release_interface(DeviceHandle, InterfaceNumber) ->
     release_interface_nif(DeviceHandle, InterfaceNumber).
 
 release_interface_nif(_DeviceHandle, _InterfaceNumber) ->
     erlang:nif_error(not_loaded).
+
+-spec set_configuration(device_handle(), integer()) -> ok | {error, term()}.
+set_configuration(DeviceHandle, Configuration) ->
+    set_configuration_nif(DeviceHandle, Configuration).
+
+set_configuration_nif(_DeviceHandle, _Configuration) ->
+    erlang:nif_error(not_loaded).
+
+-spec attach_kernel_driver(device_handle(), integer()) -> ok | {error, term()}.
+attach_kernel_driver(DeviceHandle, InterfaceNumber) ->
+    attach_kernel_driver_nif(DeviceHandle, InterfaceNumber).
+
+attach_kernel_driver_nif(_DeviceHandle, _InterfaceNumber) ->
+    erlang:nif_error(not_loaded).
+
+-spec detach_kernel_driver(device_handle(), integer()) -> ok | {error, term()}.
+detach_kernel_driver(DeviceHandle, InterfaceNumber) ->
+    detach_kernel_driver_nif(DeviceHandle, InterfaceNumber).
+
+detach_kernel_driver_nif(_DeviceHandle, _InterfaceNumber) ->
+    erlang:nif_error(not_loaded).
+
 
 -spec read_bulk(device_handle(), byte(), integer(), non_neg_integer()) -> {ok, binary()} | {error, term()}.
 read_bulk(DeviceHandle, Endpoint, DataLen, Timeout) ->
@@ -197,7 +224,6 @@ write_control(DeviceHandle, RequestType, Request, Value, Index, Data, Timeout) -
 write_control_nif(_DeviceHandle,_RequestType, _Request, _Value, _Index, _Data, _Timeout) ->
     erlang:nif_error(not_loaded).
 
-
 %
 % Hotplug API
 %
@@ -232,6 +258,13 @@ demonitor_hotplug(HotplugEvents) ->
 demonitor_hotplug_nif(_HotplugEvents) ->
     erlang:nif_error(not_loaded).
 
+
+-spec has_capability(non_neg_integer()) -> ok | not_supported.
+has_capability(Capability) ->
+    has_capability_nif(Capability).
+
+has_capability_nif(_Capability) ->
+    erlang:nif_error(not_loaded).
 
 %
 % Initialization
