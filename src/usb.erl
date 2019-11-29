@@ -13,7 +13,18 @@
 ]).
 -export([
     open_device/1,
-    close_device/1
+    close_device/1,
+    claim_interface/2,
+    release_interface/2,
+    set_configuration/2,
+    read_bulk/4,
+    write_bulk/4,
+    read_interrupt/4,
+    write_interrupt/4,
+    read_control/7,
+    write_control/7,
+    attach_kernel_driver/2,
+    detach_kernel_driver/2
 ]).
 -export([
     monitor_hotplug/0,
@@ -25,6 +36,10 @@
     device_handle/0,
     hotplug_monitor/0
 ]).
+-export([
+    has_capability/1
+]).
+
 -on_load(init/0).
 
 
@@ -173,6 +188,90 @@ close_device_nif(_DeviceHandle) ->
     erlang:nif_error(not_loaded).
 
 
+-spec claim_interface(device_handle(), non_neg_integer()) -> ok | {error, term()}.
+claim_interface(DeviceHandle, InterfaceNumber) ->
+    claim_interface_nif(DeviceHandle, InterfaceNumber).
+
+claim_interface_nif(_DeviceHandle, _InterfaceNumber) ->
+    erlang:nif_error(not_loaded).
+
+-spec release_interface(device_handle(), non_neg_integer()) -> ok | {error, term()}.
+release_interface(DeviceHandle, InterfaceNumber) ->
+    release_interface_nif(DeviceHandle, InterfaceNumber).
+
+release_interface_nif(_DeviceHandle, _InterfaceNumber) ->
+    erlang:nif_error(not_loaded).
+
+-spec set_configuration(device_handle(), integer()) -> ok | {error, term()}.
+set_configuration(DeviceHandle, Configuration) ->
+    set_configuration_nif(DeviceHandle, Configuration).
+
+set_configuration_nif(_DeviceHandle, _Configuration) ->
+    erlang:nif_error(not_loaded).
+
+-spec attach_kernel_driver(device_handle(), integer()) -> ok | {error, term()}.
+attach_kernel_driver(DeviceHandle, InterfaceNumber) ->
+    attach_kernel_driver_nif(DeviceHandle, InterfaceNumber).
+
+attach_kernel_driver_nif(_DeviceHandle, _InterfaceNumber) ->
+    erlang:nif_error(not_loaded).
+
+-spec detach_kernel_driver(device_handle(), integer()) -> ok | {error, term()}.
+detach_kernel_driver(DeviceHandle, InterfaceNumber) ->
+    detach_kernel_driver_nif(DeviceHandle, InterfaceNumber).
+
+detach_kernel_driver_nif(_DeviceHandle, _InterfaceNumber) ->
+    erlang:nif_error(not_loaded).
+
+
+-spec read_bulk(device_handle(), byte(), integer(), timeout()) -> {ok, binary()} | {error, timeout, binary()} | {error, term()}.
+read_bulk(DeviceHandle, Endpoint, DataLen, Timeout) ->
+    read_bulk_nif(DeviceHandle, Endpoint, DataLen, nif_timeout(Timeout)).
+
+%% nif
+read_bulk_nif(_DeviceHandle, _Endpoint, _DataLen, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec write_bulk(device_handle(), byte(), binary(), timeout()) -> {ok, integer()} | {error, timeout, non_neg_integer()} | {error, term()}.
+write_bulk(DeviceHandle, Endpoint, Data, Timeout) ->
+    write_bulk_nif(DeviceHandle, Endpoint, Data, nif_timeout(Timeout)).
+
+%% nif
+write_bulk_nif(_DeviceHandle, _Endpoint, _Data, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec read_interrupt(device_handle(), byte(), integer(), timeout()) -> {ok, binary()} | {error, timeout, binary()} | {error, term()}.
+read_interrupt(DeviceHandle, Endpoint, DataLen, Timeout) ->
+    read_interrupt_nif(DeviceHandle, Endpoint, DataLen, nif_timeout(Timeout)).
+
+%% nif
+read_interrupt_nif(_DeviceHandle, _Endpoint, _DataLen, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec write_interrupt(device_handle(), byte(), binary(), timeout()) -> {ok, integer()} | {error, timeout, non_neg_integer()} | {error, term()}.
+write_interrupt(DeviceHandle, Endpoint, Data, Timeout) ->
+    write_interrupt_nif(DeviceHandle, Endpoint, Data, nif_timeout(Timeout)).
+
+%% nif
+write_interrupt_nif(_DeviceHandle, _Endpoint, _Data, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec read_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), non_neg_integer(), timeout()) -> {ok, binary()} | {error, term()}.
+read_control(DeviceHandle, RequestType, Request, Value, Index, ReadLen, Timeout) ->
+    read_control_nif(DeviceHandle, RequestType, Request, Value, Index, ReadLen, nif_timeout(Timeout)).
+
+%% nif
+read_control_nif(_DeviceHandle,_RequestType, _Request, _Value, _Index, _ReadLen, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
+-spec write_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), binary(), timeout()) -> {ok, integer()} | {error, term()}.
+write_control(DeviceHandle, RequestType, Request, Value, Index, Data, Timeout) ->
+    write_control_nif(DeviceHandle, RequestType, Request, Value, Index, Data, nif_timeout(Timeout)).
+
+%% nif
+write_control_nif(_DeviceHandle,_RequestType, _Request, _Value, _Index, _Data, _Timeout) ->
+    erlang:nif_error(not_loaded).
+
 %
 % Hotplug API
 %
@@ -207,6 +306,21 @@ demonitor_hotplug(HotplugEvents) ->
 demonitor_hotplug_nif(_HotplugEvents) ->
     erlang:nif_error(not_loaded).
 
+
+-spec has_capability(non_neg_integer()) -> ok | not_supported.
+has_capability(Capability) ->
+    has_capability_nif(Capability).
+
+has_capability_nif(_Capability) ->
+    erlang:nif_error(not_loaded).
+
+%
+% Helpers
+%
+
+nif_timeout(infinity) -> 0;
+nif_timeout(0) -> 1;
+nif_timeout(N) -> N.
 
 %
 % Initialization
