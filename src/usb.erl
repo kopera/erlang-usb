@@ -3,6 +3,11 @@
     get_device_list/0
 ]).
 -export([
+    get_bus_number/1,
+    get_port_number/1,
+    get_port_numbers/1,
+    get_address/1,
+    get_device_speed/1,
     get_device_descriptor/1,
     get_configuration_descriptor/2
 ]).
@@ -26,6 +31,49 @@
 %
 % Device List API
 %
+
+-spec get_bus_number(device()) -> {ok, 0..255} | {error, term()}.
+get_bus_number(Device) ->
+    get_bus_number_nif(Device).
+
+%% nif
+get_bus_number_nif(_Device) ->
+    erlang:nif_error(not_loaded).
+
+-spec get_port_number(device()) -> {ok, 0..255} | {error, term()}.
+get_port_number(Device) ->
+    get_port_number_nif(Device).
+
+%%nif
+get_port_number_nif(_Device) ->
+    erlang:nif_error(not_loaded).
+
+-spec get_port_numbers(device()) -> {ok, [0..255]} | {error, term()}.
+get_port_numbers(Device) ->
+    get_port_numbers_nif(Device).
+
+%% nif
+get_port_numbers_nif(_Device) ->
+    erlang:nif_error(not_loaded).
+
+
+-spec get_address(device()) -> {ok, 0..255} | {error, term()}.
+get_address(Device) ->
+    get_address_nif(Device).
+
+%% nif
+get_address_nif(_Device) ->
+    erlang:nif_error(not_loaded).
+
+
+-spec get_device_speed(device()) -> {ok, device_speed()} | {error, term()}.
+-type device_speed() :: unknown | low | full | high | super | super_plus.
+get_device_speed(Device) ->
+    get_device_speed_nif(Device).
+
+%% nif
+get_device_speed_nif(_Device) ->
+    erlang:nif_error(not_loaded).
 
 -spec get_device_list() -> {ok, [device()]} | {error, term()}.
 -opaque device() :: reference().

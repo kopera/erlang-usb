@@ -14,6 +14,8 @@
 #define CHECK_MAP_ARRAYS(keys, values) \
     static_assert(((ARRAY_LENGTH((keys))) == (ARRAY_LENGTH((values)))), "key/value size mismatch")
 
+// As per the USB 3.0 specs, the current maximum limit for the depth is 7.
+#define MAX_DEV_DEPTH (7)
 
 /* Types */
 
@@ -171,6 +173,15 @@ static ERL_NIF_TERM libusb_error_to_atom(enum libusb_error error)
     }
 }
 
+static ERL_NIF_TERM speed_to_atom(ErlNifEnv* env, int speed) {
+    switch (speed) {
+        case LIBUSB_SPEED_LOW: return enif_make_atom(env, "low");
+        case LIBUSB_SPEED_FULL: return enif_make_atom(env, "full");
+        case LIBUSB_SPEED_HIGH: return enif_make_atom(env, "high");
+        case LIBUSB_SPEED_SUPER: return enif_make_atom(env, "super");
+        default: return enif_make_atom(env, "unknown");
+    }
+}
 
 static ERL_NIF_TERM libusb_endpoints_export(ErlNifEnv *env, const struct libusb_endpoint_descriptor endpoint_descriptors[], uint8_t num_endpoint_descriptors)
 {
@@ -363,6 +374,68 @@ static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv *env, int argc, const ERL_
     return enif_make_tuple2(env, am_ok, result);
 }
 
+static ERL_NIF_TERM usb_nif_get_bus_number(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+    usb_nif_device_t *usb_device;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
+        return enif_make_badarg(env);
+    }
+
+    uint8_t bus_no;
+    bus_no = libusb_get_bus_number(usb_device->device);
+    return enif_make_tuple2(env, am_ok, enif_make_uint(env, bus_no));
+}
+
+static ERL_NIF_TERM usb_nif_get_port_number(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+    usb_nif_device_t *usb_device;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
+        return enif_make_badarg(env);
+    }
+
+    uint8_t port_no;
+    port_no = libusb_get_port_number(usb_device->device);
+    return enif_make_tuple2(env, am_ok, enif_make_uint(env, port_no));
+}
+
+static ERL_NIF_TERM usb_nif_get_port_numbers(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+    usb_nif_device_t *usb_device;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
+        return enif_make_badarg(env);
+    }
+
+    int result;
+    uint8_t port_nos[MAX_DEV_DEPTH];
+    ERL_NIF_TERM result_arr[MAX_DEV_DEPTH];
+    result = libusb_get_port_numbers(usb_device->device, port_nos, ARRAY_LENGTH(port_nos));
+
+    for (unsigned int i=0; i<result; i++)
+    {
+        result_arr[i] = enif_make_uint(env, port_nos[i]);
+    }
+
+    return enif_make_tuple2(env, am_ok, enif_make_list_from_array(env, result_arr, result));
+}
+
+static ERL_NIF_TERM usb_nif_get_address(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+    usb_nif_device_t *usb_device;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
+        return enif_make_badarg(env);
+    }
+
+    uint8_t addr;
+    addr = libusb_get_device_address(usb_device->device);
+    return enif_make_tuple2(env, am_ok, enif_make_uint(env, addr));
+}
+
+static ERL_NIF_TERM usb_nif_get_device_speed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+    usb_nif_device_t *usb_device;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
+        return enif_make_badarg(env);
+    }
+
+    int speed;
+    speed = libusb_get_device_speed(usb_device->device);
+    return enif_make_tuple2(env, am_ok, speed_to_atom(env, speed));
+}
 
 static ERL_NIF_TERM usb_nif_get_device_descriptor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -758,6 +831,11 @@ static int usb_nif_on_upgrade(ErlNifEnv *env, void** priv_data, void** old_priv_
 static ErlNifFunc nif_funcs[] = {
     {"get_device_list_nif", 0, usb_nif_get_device_list, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
+    {"get_bus_number_nif", 1, usb_nif_get_bus_number},
+    {"get_port_number_nif", 1, usb_nif_get_port_number},
+    {"get_port_numbers_nif", 1, usb_nif_get_port_numbers},
+    {"get_address_nif", 1, usb_nif_get_address},
+    {"get_device_speed_nif", 1, usb_nif_get_device_speed},
     {"get_device_descriptor_nif", 1, usb_nif_get_device_descriptor},
     {"get_configuration_descriptor_nif", 2, usb_nif_get_configuration_descriptor},
 
