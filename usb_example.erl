@@ -68,8 +68,10 @@ handle_info({timeout, _Ref, trigger}, State) ->
     case usb:read_interrupt(State#state.devhnd, 16#81, 8, 2000) of
         {ok, BedStatus} ->
             io:fwrite("Bed Status~p~n", [BedStatus]);
-        {error, timeout} ->
-            io:fwrite("Timeout error ");
+        {error, timeout, <<>>} ->
+            io:fwrite("Timeout error ~n");
+        {error, timeout, _Data} ->
+            io:fwrite("Timeout error Data~n");
         {error, no_device} ->
             io:fwrite("Device removed ")
     end,

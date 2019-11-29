@@ -712,6 +712,12 @@ static ERL_NIF_TERM usb_nif_read_bulk(ErlNifEnv* env, int argc, const ERL_NIF_TE
     ret = libusb_bulk_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, p_data, data_len, &transferred, timeout);
 
     if (ret != LIBUSB_SUCCESS) {
+        if (ret == LIBUSB_ERROR_TIMEOUT) {
+            ERL_NIF_TERM data;
+            memcpy((void*)enif_make_new_binary(env, (size_t) transferred, &data), (void*)p_data, (size_t)transferred);
+            enif_free(p_data);
+            return enif_make_tuple3(env, am_error, libusb_error_to_atom(ret), data);
+        }
         enif_free(p_data);
         return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
     }
@@ -750,13 +756,10 @@ static ERL_NIF_TERM usb_nif_write_bulk(ErlNifEnv* env, int argc, const ERL_NIF_T
     ret = libusb_bulk_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, tx.data, tx.size, &transferred, timeout);
 
     if (ret != LIBUSB_SUCCESS) {
-        ERL_NIF_TERM err;
         if (ret == LIBUSB_ERROR_TIMEOUT) {
-            err = enif_make_tuple2(env, libusb_error_to_atom(ret), enif_make_int(env, transferred));
-        } else {
-            err = libusb_error_to_atom(ret);
+            return enif_make_tuple3(env, am_error, libusb_error_to_atom(ret), enif_make_int(env, transferred));
         }
-        return enif_make_tuple2(env, am_error, err);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
     }
 
     return enif_make_tuple2(env, am_ok, enif_make_int(env, transferred));
@@ -794,6 +797,12 @@ static ERL_NIF_TERM usb_nif_read_interrupt(ErlNifEnv* env, int argc, const ERL_N
 
     ret = libusb_interrupt_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, p_data, data_len, &transferred, timeout);
     if (ret != LIBUSB_SUCCESS) {
+        if (ret == LIBUSB_ERROR_TIMEOUT) {
+            ERL_NIF_TERM data;
+            memcpy((void*)enif_make_new_binary(env, (size_t) transferred, &data), (void*)p_data, (size_t)transferred);
+            enif_free(p_data);
+            return enif_make_tuple3(env, am_error, libusb_error_to_atom(ret), data);
+        }
         enif_free(p_data);
         return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
     }
@@ -832,13 +841,10 @@ static ERL_NIF_TERM usb_nif_write_interrupt(ErlNifEnv* env, int argc, const ERL_
     ret = libusb_interrupt_transfer(usb_nif_device_handle->device_handle, (unsigned char)endpoint, tx.data, tx.size, &transferred, timeout);
 
     if (ret != LIBUSB_SUCCESS) {
-        ERL_NIF_TERM err;
         if (ret == LIBUSB_ERROR_TIMEOUT) {
-            err = enif_make_tuple2(env, libusb_error_to_atom(ret), enif_make_int(env, transferred));
-        } else {
-            err = libusb_error_to_atom(ret);
+            return enif_make_tuple3(env, am_error, libusb_error_to_atom(ret), enif_make_int(env, transferred));
         }
-        return enif_make_tuple2(env, am_error, err);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
     }
 
     return enif_make_tuple2(env, am_ok, enif_make_int(env, transferred));

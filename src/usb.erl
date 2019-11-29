@@ -176,49 +176,49 @@ detach_kernel_driver_nif(_DeviceHandle, _InterfaceNumber) ->
     erlang:nif_error(not_loaded).
 
 
--spec read_bulk(device_handle(), byte(), integer(), non_neg_integer()) -> {ok, binary()} | {error, term()}.
+-spec read_bulk(device_handle(), byte(), integer(), timeout()) -> {ok, binary()} | {error, timeout, binary()} | {error, term()}.
 read_bulk(DeviceHandle, Endpoint, DataLen, Timeout) ->
-    read_bulk_nif(DeviceHandle, Endpoint, DataLen, Timeout).
+    read_bulk_nif(DeviceHandle, Endpoint, DataLen, nif_timeout(Timeout)).
 
 %% nif
 read_bulk_nif(_DeviceHandle, _Endpoint, _DataLen, _Timeout) ->
     erlang:nif_error(not_loaded).
 
--spec write_bulk(device_handle(), byte(), binary(), non_neg_integer()) -> {ok, integer()} | {error, term()}.
+-spec write_bulk(device_handle(), byte(), binary(), timeout()) -> {ok, integer()} | {error, timeout, non_neg_integer()} | {error, term()}.
 write_bulk(DeviceHandle, Endpoint, Data, Timeout) ->
-    write_bulk_nif(DeviceHandle, Endpoint, Data, Timeout).
+    write_bulk_nif(DeviceHandle, Endpoint, Data, nif_timeout(Timeout)).
 
 %% nif
 write_bulk_nif(_DeviceHandle, _Endpoint, _Data, _Timeout) ->
     erlang:nif_error(not_loaded).
 
--spec read_interrupt(device_handle(), byte(), integer(), non_neg_integer()) -> {ok, binary()} | {error, term()}.
+-spec read_interrupt(device_handle(), byte(), integer(), timeout()) -> {ok, binary()} | {error, timeout, binary()} | {error, term()}.
 read_interrupt(DeviceHandle, Endpoint, DataLen, Timeout) ->
-    read_interrupt_nif(DeviceHandle, Endpoint, DataLen, Timeout).
+    read_interrupt_nif(DeviceHandle, Endpoint, DataLen, nif_timeout(Timeout)).
 
 %% nif
 read_interrupt_nif(_DeviceHandle, _Endpoint, _DataLen, _Timeout) ->
     erlang:nif_error(not_loaded).
 
--spec write_interrupt(device_handle(), byte(), binary(), non_neg_integer()) -> {ok, integer()} | {error, term()}.
+-spec write_interrupt(device_handle(), byte(), binary(), timeout()) -> {ok, integer()} | {error, timeout, non_neg_integer()} | {error, term()}.
 write_interrupt(DeviceHandle, Endpoint, Data, Timeout) ->
-    write_interrupt_nif(DeviceHandle, Endpoint, Data, Timeout).
+    write_interrupt_nif(DeviceHandle, Endpoint, Data, nif_timeout(Timeout)).
 
 %% nif
 write_interrupt_nif(_DeviceHandle, _Endpoint, _Data, _Timeout) ->
     erlang:nif_error(not_loaded).
 
--spec read_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer()) -> {ok, binary()} | {error, term()}.
+-spec read_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), non_neg_integer(), timeout()) -> {ok, binary()} | {error, term()}.
 read_control(DeviceHandle, RequestType, Request, Value, Index, ReadLen, Timeout) ->
-    read_control_nif(DeviceHandle, RequestType, Request, Value, Index, ReadLen, Timeout).
+    read_control_nif(DeviceHandle, RequestType, Request, Value, Index, ReadLen, nif_timeout(Timeout)).
 
 %% nif
 read_control_nif(_DeviceHandle,_RequestType, _Request, _Value, _Index, _ReadLen, _Timeout) ->
     erlang:nif_error(not_loaded).
 
--spec write_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), binary(), non_neg_integer()) -> {ok, integer()} | {error, term()}.
+-spec write_control(device_handle(), byte(), byte(), non_neg_integer(), non_neg_integer(), binary(), timeout()) -> {ok, integer()} | {error, term()}.
 write_control(DeviceHandle, RequestType, Request, Value, Index, Data, Timeout) ->
-    write_control_nif(DeviceHandle, RequestType, Request, Value, Index, Data, Timeout).
+    write_control_nif(DeviceHandle, RequestType, Request, Value, Index, Data, nif_timeout(Timeout)).
 
 %% nif
 write_control_nif(_DeviceHandle,_RequestType, _Request, _Value, _Index, _Data, _Timeout) ->
@@ -265,6 +265,14 @@ has_capability(Capability) ->
 
 has_capability_nif(_Capability) ->
     erlang:nif_error(not_loaded).
+
+%
+% Helpers
+%
+
+nif_timeout(infinity) -> 0;
+nif_timeout(0) -> 1;
+nif_timeout(N) -> N.
 
 %
 % Initialization
