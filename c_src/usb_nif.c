@@ -376,38 +376,35 @@ static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv *env, int argc, const ERL_
 
 static ERL_NIF_TERM usb_nif_get_bus_number(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     usb_nif_device_t *usb_device;
-    uint8_t bus_no;
-
     if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
         return enif_make_badarg(env);
     }
 
+    uint8_t bus_no;
     bus_no = libusb_get_bus_number(usb_device->device);
     return enif_make_tuple2(env, am_ok, enif_make_uint(env, bus_no));
 }
 
 static ERL_NIF_TERM usb_nif_get_port_number(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     usb_nif_device_t *usb_device;
-    uint8_t port_no;
-
     if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
         return enif_make_badarg(env);
     }
 
+    uint8_t port_no;
     port_no = libusb_get_port_number(usb_device->device);
     return enif_make_tuple2(env, am_ok, enif_make_uint(env, port_no));
 }
 
 static ERL_NIF_TERM usb_nif_get_port_numbers(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-    int result;
     usb_nif_device_t *usb_device;
-    uint8_t port_nos[MAX_DEV_DEPTH];
-    ERL_NIF_TERM result_arr[MAX_DEV_DEPTH];
-
     if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
         return enif_make_badarg(env);
     }
 
+    int result;
+    uint8_t port_nos[MAX_DEV_DEPTH];
+    ERL_NIF_TERM result_arr[MAX_DEV_DEPTH];
     result = libusb_get_port_numbers(usb_device->device, port_nos, ARRAY_LENGTH(port_nos));
 
     for (unsigned int i=0; i<result; i++)
@@ -420,24 +417,22 @@ static ERL_NIF_TERM usb_nif_get_port_numbers(ErlNifEnv* env, int argc, const ERL
 
 static ERL_NIF_TERM usb_nif_get_address(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     usb_nif_device_t *usb_device;
-    uint8_t addr;
-
     if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
         return enif_make_badarg(env);
     }
 
+    uint8_t addr;
     addr = libusb_get_device_address(usb_device->device);
     return enif_make_tuple2(env, am_ok, enif_make_uint(env, addr));
 }
 
 static ERL_NIF_TERM usb_nif_get_device_speed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     usb_nif_device_t *usb_device;
-    int speed;
-
     if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
         return enif_make_badarg(env);
     }
 
+    int speed;
     speed = libusb_get_device_speed(usb_device->device);
     return enif_make_tuple2(env, am_ok, speed_to_atom(env, speed));
 }
