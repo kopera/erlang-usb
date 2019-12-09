@@ -138,31 +138,31 @@ get_device_descriptor_nif(_Device) ->
     extra := binary()
 }.
 -type interface_descriptor() :: #{
-    % bLength := non_neg_integer(),
-    % bDescriptorType := non_neg_integer(),
-    % bInterfaceNumber := non_neg_integer(),
-    % bAlternateSetting := non_neg_integer(),
-    % bNumEndpoints := non_neg_integer(),
-    % bInterfaceClass := non_neg_integer(),
-    % bInterfaceSubClass := non_neg_integer(),
-    % bInterfaceProtocol := non_neg_integer(),
-    % iInterface := non_neg_integer(),
-    % endpoints := [endpoint_descriptor()],
-    % extra := non_neg_integer(),
-    % extra_length := non_neg_integer()
+    bLength := non_neg_integer(),
+    bDescriptorType := non_neg_integer(),
+    bInterfaceNumber := non_neg_integer(),
+    bAlternateSetting := non_neg_integer(),
+    bNumEndpoints := non_neg_integer(),
+    bInterfaceClass := non_neg_integer(),
+    bInterfaceSubClass := non_neg_integer(),
+    bInterfaceProtocol := non_neg_integer(),
+    iInterface := non_neg_integer(),
+    endpoints := [endpoint_descriptor()],
+    extra := non_neg_integer(),
+    extra_length := non_neg_integer()
 }.
-% -type endpoint_descriptor() :: #{
-%     bLength := non_neg_integer(),
-%     bDescriptorType := non_neg_integer(),
-%     bEndpointAddress := non_neg_integer(),
-%     bmAttributes := non_neg_integer(),
-%     wMaxPacketSize := non_neg_integer(),
-%     binterval := non_neg_integer(),
-%     bRefresh := non_neg_integer(),
-%     bSynchAddress := non_neg_integer(),
-%     extra := non_neg_integer(),
-%     extra_length := non_neg_integer()
-% }.
+-type endpoint_descriptor() :: #{
+    bLength := non_neg_integer(),
+    bDescriptorType := non_neg_integer(),
+    bEndpointAddress := non_neg_integer(),
+    bmAttributes := non_neg_integer(),
+    wMaxPacketSize := non_neg_integer(),
+    binterval := non_neg_integer(),
+    bRefresh := non_neg_integer(),
+    bSynchAddress := non_neg_integer(),
+    extra := non_neg_integer(),
+    extra_length := non_neg_integer()
+}.
 get_configuration_descriptor(Device, ConfigIndex) ->
     get_configuration_descriptor_nif(Device, ConfigIndex).
 
