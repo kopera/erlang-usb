@@ -703,7 +703,6 @@ static ERL_NIF_TERM usb_nif_claim_interface(ErlNifEnv* env, int argc, const ERL_
 
     int ret = libusb_claim_interface(usb_nif_device_handle->device_handle, (int) interface_number);
     if(ret != LIBUSB_SUCCESS) {
-        enif_release_resource(usb_nif_device_handle);
         return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
     }
 
@@ -724,7 +723,26 @@ static ERL_NIF_TERM usb_nif_release_interface(ErlNifEnv* env, int argc, const ER
 
     int ret = libusb_release_interface(usb_nif_device_handle->device_handle, (int) interface_number);
     if(ret != LIBUSB_SUCCESS) {
-        enif_release_resource(usb_nif_device_handle);
+        return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
+    }
+
+    return am_ok;
+}
+
+static ERL_NIF_TERM usb_nif_clear_halt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    usb_nif_device_handle_t *usb_nif_device_handle;
+    if (!enif_get_resource(env, argv[0], usb_nif_device_handle_resource_type, (void**) &usb_nif_device_handle)) {
+        return enif_make_badarg(env);
+    }
+
+    unsigned int endpoint;
+    if (!enif_get_uint(env, argv[1], &endpoint)) {
+        return enif_make_badarg(env);
+    }
+
+    int ret = libusb_clear_halt(usb_nif_device_handle->device_handle, (unsigned char)endpoint);
+    if(ret != LIBUSB_SUCCESS) {
         return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
     }
 
@@ -745,7 +763,6 @@ static ERL_NIF_TERM usb_nif_set_configuration(ErlNifEnv* env, int argc, const ER
 
     int ret = libusb_set_configuration(usb_nif_device_handle->device_handle, configuration);
     if(ret != LIBUSB_SUCCESS) {
-        enif_release_resource(usb_nif_device_handle);
         return enif_make_tuple2(env, am_error, libusb_error_to_atom(ret));
     }
 
@@ -1247,6 +1264,8 @@ static ErlNifFunc nif_funcs[] = {
 
     {"claim_interface_nif", 2, usb_nif_claim_interface},
     {"release_interface_nif", 2, usb_nif_release_interface},
+
+    {"clear_halt_nif", 2, usb_nif_clear_halt, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     {"set_configuration_nif", 2, usb_nif_set_configuration, ERL_NIF_DIRTY_JOB_IO_BOUND},
 

@@ -16,6 +16,7 @@
     close_device/1,
     claim_interface/2,
     release_interface/2,
+    clear_halt/2,
     set_configuration/2,
     read_bulk/4,
     write_bulk/4,
@@ -201,6 +202,15 @@ release_interface(DeviceHandle, InterfaceNumber) ->
 
 release_interface_nif(_DeviceHandle, _InterfaceNumber) ->
     erlang:nif_error(not_loaded).
+
+
+-spec clear_halt(device_handle(), byte()) -> ok | {error, term()}.
+clear_halt(DeviceHandle, Endpoint) ->
+    clear_halt_nif(DeviceHandle, Endpoint).
+
+clear_halt_nif(_DeviceHandle, _Endpoint) ->
+    erlang:nif_error(not_loaded).
+
 
 -spec set_configuration(device_handle(), integer()) -> ok | {error, term()}.
 set_configuration(DeviceHandle, Configuration) ->
