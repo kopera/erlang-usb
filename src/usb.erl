@@ -139,30 +139,26 @@ get_device_descriptor_nif(_Device) ->
     extra := binary()
 }.
 -type interface_descriptor() :: #{
-    bLength := non_neg_integer(),
-    bDescriptorType := non_neg_integer(),
-    bInterfaceNumber := non_neg_integer(),
-    bAlternateSetting := non_neg_integer(),
-    bNumEndpoints := non_neg_integer(),
-    bInterfaceClass := non_neg_integer(),
-    bInterfaceSubClass := non_neg_integer(),
-    bInterfaceProtocol := non_neg_integer(),
-    iInterface := non_neg_integer(),
-    endpoints := [endpoint_descriptor()],
-    extra := non_neg_integer(),
-    extra_length := non_neg_integer()
+    alt_settings := [alt_setting()]
 }.
--type endpoint_descriptor() :: #{
-    bLength := non_neg_integer(),
-    bDescriptorType := non_neg_integer(),
-    bEndpointAddress := non_neg_integer(),
-    bmAttributes := non_neg_integer(),
-    wMaxPacketSize := non_neg_integer(),
-    binterval := non_neg_integer(),
-    bRefresh := non_neg_integer(),
-    bSynchAddress := non_neg_integer(),
-    extra := non_neg_integer(),
-    extra_length := non_neg_integer()
+-type alt_setting() :: #{
+    interface_number := non_neg_integer(),
+    setting_number := non_neg_integer(),
+    class_code := non_neg_integer(),
+    sub_class_code := non_neg_integer(),
+    protocol_code := non_neg_integer(),
+    description_string_index := non_neg_integer(),
+    endpoints := [endpoint()],
+    extra := binary()
+}.
+-type endpoint() :: #{
+    address := non_neg_integer(),
+    attributes := non_neg_integer(),
+    max_packet_size := non_neg_integer(),
+    interval := non_neg_integer(),
+    refresh := non_neg_integer(),
+    synch_address := non_neg_integer(),
+    extra := binary()
 }.
 get_configuration_descriptor(Device, ConfigIndex) ->
     get_configuration_descriptor_nif(Device, ConfigIndex).
