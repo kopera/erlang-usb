@@ -8,6 +8,8 @@
 #include <erl_nif.h>
 #include <libusb.h>
 
+#include "khash.h"
+
 
 #define ARRAY_LENGTH(x) \
     ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
@@ -18,16 +20,45 @@
 #define MAX_DEV_DEPTH (7)
 
 /* Types */
+static inline uint32_t uintptr_hash_func(uintptr_t key)
+{
+#if UINTPTR_MAX == UINT64_MAX
+    key = (~key) + (key << 18);
+    key = key ^ (key >> 31);
+    key = (key + (key << 2)) + (key << 4);
+    key = key ^ (key >> 11);
+    key = key + (key << 6);
+    key = key ^ (key >> 22);
+    return (uint32_t)key;
+#else
+    key = ~key + (key << 15);
+    key = key ^ (key >> 12);
+    key = key + (key << 2);
+    key = key ^ (key >> 4);
+    key = (key + (key << 3)) + (key << 11);
+    key = key ^ (key >> 16);
+    return key;
+#endif
+}
+
+#define uintptr_hash_equal(a, b) ((a) == (b))
+
+struct usb_nif_device;
+typedef struct usb_nif_device usb_nif_device_t;
+
+KHASH_INIT(devices, uintptr_t, usb_nif_device_t*, 1, uintptr_hash_func, uintptr_hash_equal);
 
 typedef struct {
     ErlNifMutex    *lock;
 
     libusb_context *context;
 
+    khash_t(devices)*devices;
+    ErlNifMutex    *devices_lock;
+
     ErlNifTid       handle_events_thread;
     bool            handle_events_thread_running;
 } usb_nif_t;
-
 
 /* Atoms */
 
@@ -57,26 +88,50 @@ static ERL_NIF_TERM am_other = 0;
 /* Resources */
 
 /* Resource: device */
-typedef struct {
+typedef struct usb_nif_device {
     libusb_device  *device;
 } usb_nif_device_t;
 
 static ErlNifResourceType* usb_nif_device_resource_type;
 
-static usb_nif_device_t* usb_nif_device_resource_new(libusb_device *device)
+static usb_nif_device_t* usb_nif_device_resource_get(usb_nif_t *usb_nif, libusb_device *device)
 {
-    usb_nif_device_t *usb_device = (usb_nif_device_t*) enif_alloc_resource(
-        usb_nif_device_resource_type,
-        sizeof(usb_nif_device_t));
-    usb_device->device = libusb_ref_device(device);
+    int kh_put_ret;
+    khiter_t iter;
+    usb_nif_device_t* resource = NULL;
 
-    return usb_device;
+    enif_mutex_lock(usb_nif->devices_lock);
+
+    iter = kh_put(devices, usb_nif->devices, (uintptr_t)device, &kh_put_ret);
+    if (kh_put_ret == 0) { // entry already exists
+        resource = kh_value(usb_nif->devices, iter);
+        enif_keep_resource(resource);
+    } else if (kh_put_ret > 0) {
+        resource = (usb_nif_device_t*) enif_alloc_resource(
+            usb_nif_device_resource_type,
+            sizeof(usb_nif_device_t));
+        resource->device = libusb_ref_device(device);
+
+        kh_value(usb_nif->devices, iter) = resource;
+    }
+
+    enif_mutex_unlock(usb_nif->devices_lock);
+
+    return resource;
 }
 
 static void usb_nif_device_resource_dtor(ErlNifEnv *env, void *obj)
 {
-    usb_nif_device_t *usb_nif_device = (usb_nif_device_t *) obj;
-    libusb_unref_device(usb_nif_device->device);
+    usb_nif_t *usb_nif = (usb_nif_t *) enif_priv_data(env);
+    usb_nif_device_t *resource = (usb_nif_device_t *) obj;
+
+    enif_mutex_lock(usb_nif->devices_lock);
+    khiter_t iter = kh_get(devices, usb_nif->devices, (uintptr_t)resource->device);
+    assert (iter != kh_end(usb_nif->devices));
+    kh_del(devices, usb_nif->devices, iter);
+    enif_mutex_unlock(usb_nif->devices_lock);
+
+    libusb_unref_device(resource->device);
 }
 
 static ErlNifResourceTypeInit usb_nif_device_resource_callbacks = {
@@ -86,7 +141,7 @@ static ErlNifResourceTypeInit usb_nif_device_resource_callbacks = {
 };
 
 /* Resource: device_handle */
-typedef struct {
+typedef struct usb_nif_device_handle {
     ErlNifPid               owner;
     ErlNifMonitor           owner_monitor;
 
@@ -119,7 +174,9 @@ static ErlNifResourceTypeInit usb_nif_device_handle_resource_callbacks = {
 
 
 /* Resource: hotplug_monitor */
-typedef struct {
+typedef struct usb_nif_hotplug_monitor {
+    usb_nif_t                      *usb_nif;
+
     ErlNifPid                       owner;
     ErlNifMonitor                   owner_monitor;
 
@@ -316,7 +373,7 @@ static int libusb_hotplug_callback(libusb_context *context, libusb_device *devic
     switch (event) {
         case LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED: {
             ErlNifEnv *env = enif_alloc_env();
-            usb_nif_device_t *usb_nif_device = usb_nif_device_resource_new(device);
+            usb_nif_device_t *usb_nif_device = usb_nif_device_resource_get(usb_nif_hotplug_monitor->usb_nif, device);
 
             ERL_NIF_TERM payload = enif_make_resource(env, usb_nif_device);
             ERL_NIF_TERM message = enif_make_tuple3(env, am_usb, am_device_arrived, payload);
@@ -329,7 +386,7 @@ static int libusb_hotplug_callback(libusb_context *context, libusb_device *devic
         }
         case LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT: {
             ErlNifEnv *env = enif_alloc_env();
-            usb_nif_device_t *usb_nif_device = usb_nif_device_resource_new(device);
+            usb_nif_device_t *usb_nif_device = usb_nif_device_resource_get(usb_nif_hotplug_monitor->usb_nif, device);
 
             ERL_NIF_TERM payload = enif_make_resource(env, usb_nif_device);
             ERL_NIF_TERM message = enif_make_tuple3(env, am_usb, am_device_left, payload);
@@ -361,7 +418,7 @@ static ERL_NIF_TERM usb_nif_get_device_list(ErlNifEnv *env, int argc, const ERL_
 
     ERL_NIF_TERM result = enif_make_list(env, 0);
     for (size_t i = ret; i > 0; i--) {
-        usb_nif_device_t *usb_nif_device = usb_nif_device_resource_new(devices[i - 1]);
+        usb_nif_device_t *usb_nif_device = usb_nif_device_resource_get(usb_nif, devices[i - 1]);
 
         result = enif_make_list_cell(
             env,
@@ -625,6 +682,7 @@ static ERL_NIF_TERM usb_nif_monitor_hotplug(ErlNifEnv* env, int argc, const ERL_
     usb_nif_hotplug_monitor_t *usb_nif_hotplug_monitor = (usb_nif_hotplug_monitor_t*) enif_alloc_resource(
         usb_nif_hotplug_monitor_resource_type,
         sizeof(usb_nif_hotplug_monitor_t));
+    usb_nif_hotplug_monitor->usb_nif = usb_nif;
     usb_nif_hotplug_monitor->owner = owner;
     atomic_flag_clear(&(usb_nif_hotplug_monitor->closed));
 
@@ -1150,6 +1208,10 @@ static int usb_nif_on_load(ErlNifEnv *env, void** priv_data, ERL_NIF_TERM load_i
         return ret;
     }
 
+    // Initialize device hash table
+    usb_nif->devices = kh_init(devices);
+    usb_nif->devices_lock = enif_mutex_create("usb_nif_devices_lock");
+
     // Start polling thread
     usb_nif->handle_events_thread_running = true;
     ret = enif_thread_create("usb_nif_handle_events",
@@ -1221,6 +1283,12 @@ static void usb_nif_on_unload(ErlNifEnv *env, void* priv_data)
     usb_nif->handle_events_thread_running = false;
     enif_mutex_unlock(usb_nif->lock);
     enif_thread_join(usb_nif->handle_events_thread, NULL);
+
+    // Deinitilize device hash table
+    enif_mutex_lock(usb_nif->devices_lock);
+    kh_destroy(devices, usb_nif->devices);
+    enif_mutex_unlock(usb_nif->devices_lock);
+    enif_mutex_destroy(usb_nif->devices_lock);
 
     libusb_exit(usb_nif->context);
 
