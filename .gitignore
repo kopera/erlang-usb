@@ -1,2 +1,4 @@
 /_build
+/_checkouts
+/doc
 /priv/usb_nif.so

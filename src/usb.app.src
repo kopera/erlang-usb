@@ -1,11 +1,15 @@
 {application, usb, [
-    {description, "Erlang libusb bindings"},
-    {vsn, "git"},
-    {registered, []},
+    {description, "Erlang USB interface"},
+    {vsn, git},
     {applications, [
         kernel,
         stdlib
     ]},
     {env,[]},
-    {modules, []}
+    {modules, []},
+
+    {licenses, ["Apache 2.0"]},
+    {links, [
+        {"GitHub", "https://github.com/kopera/erlang-usb"}
+    ]}
 ]}.

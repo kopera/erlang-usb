@@ -472,7 +472,7 @@ static ERL_NIF_TERM usb_nif_get_port_numbers(ErlNifEnv* env, int argc, const ERL
     return enif_make_tuple2(env, am_ok, enif_make_list_from_array(env, result_arr, result));
 }
 
-static ERL_NIF_TERM usb_nif_get_address(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+static ERL_NIF_TERM usb_nif_get_device_address(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     usb_nif_device_t *usb_device;
     if (!enif_get_resource(env, argv[0], usb_nif_device_resource_type, (void**) &usb_device)) {
         return enif_make_badarg(env);
@@ -550,7 +550,7 @@ static ERL_NIF_TERM usb_nif_get_device_descriptor(ErlNifEnv *env, int argc, cons
 }
 
 
-static ERL_NIF_TERM usb_nif_get_configuration_descriptor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+static ERL_NIF_TERM usb_nif_get_config_descriptor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     usb_nif_device_t *usb_device;
 
@@ -1102,17 +1102,6 @@ static ERL_NIF_TERM usb_nif_write_control(ErlNifEnv* env, int argc, const ERL_NI
     return enif_make_tuple2(env, am_ok, enif_make_int(env, ret));
 }
 
-static ERL_NIF_TERM usb_nif_has_capability(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
-{
-    unsigned int capability;
-    if (!enif_get_uint(env, argv[0], &capability)) {
-        return enif_make_badarg(env);
-    }
-
-    return (libusb_has_capability(capability)) ? am_ok : am_not_supported;
-}
-
-
 static ERL_NIF_TERM usb_nif_detach_kernel_driver(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     usb_nif_device_handle_t *usb_nif_device_handle;
@@ -1319,10 +1308,10 @@ static ErlNifFunc nif_funcs[] = {
     {"get_bus_number_nif", 1, usb_nif_get_bus_number},
     {"get_port_number_nif", 1, usb_nif_get_port_number},
     {"get_port_numbers_nif", 1, usb_nif_get_port_numbers},
-    {"get_address_nif", 1, usb_nif_get_address},
+    {"get_device_address_nif", 1, usb_nif_get_device_address},
     {"get_device_speed_nif", 1, usb_nif_get_device_speed},
     {"get_device_descriptor_nif", 1, usb_nif_get_device_descriptor},
-    {"get_configuration_descriptor_nif", 2, usb_nif_get_configuration_descriptor},
+    {"get_config_descriptor_nif", 2, usb_nif_get_config_descriptor},
 
     {"open_device_nif", 1, usb_nif_open_device},
     {"close_device_nif", 1, usb_nif_close_device},
@@ -1346,7 +1335,6 @@ static ErlNifFunc nif_funcs[] = {
     {"read_control_nif", 7, usb_nif_read_control, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"write_control_nif", 7, usb_nif_write_control, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
-    {"has_capability_nif", 1, usb_nif_has_capability},
     {"attach_kernel_driver", 2, usb_nif_attach_kernel_driver},
     {"detach_kernel_driver", 2, usb_nif_detach_kernel_driver}
 };
