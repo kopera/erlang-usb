@@ -20,7 +20,7 @@ endif
 
 # Project specific C compiler/flags.
 ifeq ($(ERTS_INCLUDE_DIR),)
-	ERTS_INCLUDE_DIR := $(shell "$(ERL)" -noshell -s init stop -eval "io:format(\"~ts/erts-~ts/include/\", [code:root_dir(), erlang:system_info(version)]).")
+	ERTS_INCLUDE_DIR := $(shell "$(ERL)" -noshell -eval "io:format(\"~ts/erts-~ts/include/\", [code:root_dir(), erlang:system_info(version)])." -s erlang halt)
 endif
 
 CFLAGS += -std=c11 -fPIC -I $(ERTS_INCLUDE_DIR)
