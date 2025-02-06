@@ -17,7 +17,7 @@ You need to add `usb` as a dependency to your project. If you are using `rebar3`
 
 ```erlang
 {deps, [
-    {usb, "0.2.0"}
+    {usb, "0.2.1"}
 ]}.
 ```
 

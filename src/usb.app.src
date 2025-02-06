@@ -1,6 +1,6 @@
 {application, usb, [
     {description, "Erlang USB interface"},
-    {vsn, "git"},
+    {vsn, "0.2.1"},
     {applications, [
         kernel,
         stdlib
