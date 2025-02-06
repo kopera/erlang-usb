@@ -7,9 +7,10 @@ PKG_CONFIG ?= pkg-config
 # System specific C compiler/flags.
 UNAME_SYS := $(shell uname -s)
 ifeq ($(UNAME_SYS), Darwin)
+	DARWIN_ARCH := $(shell uname -m)
 	CC ?= cc
-	CFLAGS ?= -O2 -arch x86_64 -finline-functions -Wall -Wmissing-prototypes
-	LDFLAGS ?= -arch x86_64 -flat_namespace -undefined suppress
+	CFLAGS ?= -O2 -arch $(DARWIN_ARCH) -finline-functions -Wall -Wmissing-prototypes
+	LDFLAGS ?= -arch $(DARWIN_ARCH) -flat_namespace -undefined dynamic_lookup
 else ifeq ($(UNAME_SYS), FreeBSD)
 	CC ?= cc
 	CFLAGS ?= -O2 -finline-functions -Wall -Wmissing-prototypes
